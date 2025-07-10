@@ -465,10 +465,12 @@ class VisualAligner:
         print("Starting image alignment process...")
         
         # Load images
-        load_start = time.time()
         img_photo = cv2.imread(photo_path)
         img_drawing = cv2.imread(drawing_path)
-        load_time = time.time() - load_start
+
+        # Convert RGBA to RGB
+        img_photo = cv2.cvtColor(img_photo, cv2.COLOR_BGRA2BGR)
+        img_drawing = cv2.cvtColor(img_drawing, cv2.COLOR_BGRA2BGR)
         
         if img_photo is None or img_drawing is None:
             raise ValueError("Could not load images")
@@ -540,7 +542,6 @@ class VisualAligner:
         total_time = time.time() - total_start
         print(f"\nTotal alignment process took {total_time:.3f}s")
         print(f"Time breakdown:")
-        print(f"  Loading: {load_time:.3f}s ({100*load_time/total_time:.1f}%)")
         print(f"  Resizing: {resize_time:.3f}s ({100*resize_time/total_time:.1f}%)")
         print(f"  Preprocessing: {preprocess_time:.3f}s ({100*preprocess_time/total_time:.1f}%)")
         print(f"  Coarse alignment: {coarse_time:.3f}s ({100*coarse_time/total_time:.1f}%)")
@@ -550,7 +551,7 @@ class VisualAligner:
         return aligned_photo, final_params
 
 
-def align(photo_path: str, drawing_path: str, output_path: Optional[str] = None, skip_fine_alignment: bool = False) -> str:
+def align_image_pair(photo_path: str, drawing_path: str, output_path: Optional[str] = None, skip_fine_alignment: bool = False) -> str:
     """
     Align a photo to match a line drawing.
     
@@ -576,13 +577,123 @@ def align(photo_path: str, drawing_path: str, output_path: Optional[str] = None,
     
     return output_path
 
+def align_folders(folder_a, pattern_a, folder_b, pattern_b, output_folder, output_pattern):
+    """
+    Align images from two folders based on matching patterns.
+    
+    Args:
+        folder_a: Path to folder containing photos to be aligned
+        pattern_a: Pattern to match files in folder_a (e.g., "photo_{}.jpg")
+        folder_b: Path to folder containing reference drawings
+        pattern_b: Pattern to match files in folder_b (e.g., "drawing_{}.jpg")
+        output_folder: Path to folder where aligned images will be saved
+        output_pattern: Pattern for output filenames (e.g., "aligned_{}.jpg")
+    """
+    import glob
+    import re
+    
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+    
+    # Extract the placeholder pattern (e.g., {} or {id})
+    def extract_pattern_regex(pattern):
+        """Convert a pattern like 'photo_{}.jpg' to a regex that captures the ID."""
+        # Escape special regex characters except {}
+        escaped = re.escape(pattern)
+        # Replace escaped braces with capture group
+        regex_pattern = escaped.replace(r'\{\}', r'([^/\\]+)')
+        return regex_pattern
+    
+    def extract_id_from_filename(filename, pattern):
+        """Extract the ID from a filename using the pattern."""
+        regex = extract_pattern_regex(pattern)
+        match = re.search(regex, filename)
+        return match.group(1) if match else None
+    
+    # Get all files matching pattern_a
+    pattern_a_glob = pattern_a.replace('{}', '*')
+    files_a = glob.glob(os.path.join(folder_a, pattern_a_glob))
+    
+    if not files_a:
+        print(f"No files found matching pattern '{pattern_a}' in folder '{folder_a}'")
+        return
+    else:
+        print(f"Found {len(files_a)} files in folder A matching pattern '{pattern_a}'")
+
+    # Get all files matching pattern_b
+    pattern_b_glob = pattern_b.replace('{}', '*')
+    files_b = glob.glob(os.path.join(folder_b, pattern_b_glob))
+    
+    if not files_b:
+        print(f"No files found matching pattern '{pattern_b}' in folder '{folder_b}'")
+        return
+    else:
+        print(f"Found {len(files_b)} files in folder B matching pattern '{pattern_b}'")
+
+    # Create mapping of IDs to files for folder B
+    id_to_file_b = {}
+    for file_b in files_b:
+        filename_b = os.path.basename(file_b)
+        id_b = extract_id_from_filename(filename_b, pattern_b)
+        if id_b:
+            id_to_file_b[id_b] = file_b
+    
+    # Process each file in folder A
+    successful_alignments = 0
+    failed_alignments = 0
+    
+    for file_a in files_a:
+        filename_a = os.path.basename(file_a)
+        id_a = extract_id_from_filename(filename_a, pattern_a)
+        
+        if not id_a:
+            print(f"Warning: Could not extract ID from '{filename_a}' using pattern '{pattern_a}'")
+            failed_alignments += 1
+            continue
+        
+        # Find corresponding file in folder B
+        if id_a not in id_to_file_b:
+            print(f"Warning: No matching file found for ID '{id_a}' in folder B")
+            failed_alignments += 1
+            continue
+        
+        file_b = id_to_file_b[id_a]
+        
+        # Generate output path
+        output_filename = output_pattern.format(id_a)
+        output_path = os.path.join(output_folder, output_filename)
+        
+        print(f"\nAligning pair {successful_alignments + 1}:")
+        print(f"  Photo: {file_a}")
+        print(f"  Drawing: {file_b}")
+        print(f"  Output: {output_path}")
+        
+        try:
+            # Align the image pair
+            result_path = align_image_pair(file_a, file_b, output_path)
+            print(f"  ✓ Successfully aligned and saved to: {result_path}")
+            successful_alignments += 1
+        except Exception as e:
+            print(f"  ✗ Failed to align: {e}")
+            failed_alignments += 1
+    
+    print(f"\n=== Alignment Summary ===")
+    print(f"Successful alignments: {successful_alignments}")
+    print(f"Failed alignments: {failed_alignments}")
+    print(f"Total pairs processed: {successful_alignments + failed_alignments}")
+
+
 def main():
     # Example usage
-    photo_path = "1_photo.jpeg"  # Replace with your photo path
-    drawing_path = "1_drawing.jpeg"  # Replace with your drawing path
+    #photo_path = "1_photo.jpeg"  # Replace with your photo path
+    #drawing_path = "1_drawing.jpeg"  # Replace with your drawing path
     
-    full_aligned_path = align(photo_path, drawing_path)
-    
+    #full_aligned_path = align_image_pair(photo_path, drawing_path)
+
+    input_folder = "/home/rednax/Documents/datasets/good_styles/stitchly_final/Kontext/combi"
+    input_folder = "/home/rednax/Documents/datasets/good_styles/stitchly_final/Kontext/test"
+    align_folders(input_folder, "{}_rembg.png", input_folder, "{}_D2.jpg", input_folder, "{}_D3.jpg")
+
 
 if __name__ == "__main__":
     main()
