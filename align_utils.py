@@ -46,7 +46,7 @@ def convert_rgba_to_rgb(img, background_color=0.0):
     Convert RGBA image to RGB by multiplying RGB values with alpha channel
     and making transparent pixels equal to background_color
     """
-    if img.shape[2] == 4:  # Has alpha channel
+    if len(img.shape) == 3 and img.shape[2] == 4:  # Has alpha channel
         # Extract RGB and alpha channels
         rgb = img[:, :, :3].astype(np.float32)
         alpha = img[:, :, 3].astype(np.float32) / 255.0  # Normalize alpha to 0-1
@@ -61,5 +61,5 @@ def convert_rgba_to_rgb(img, background_color=0.0):
         
         return result
     else:
-        # Already RGB, return as is
+        # Already RGB or grayscale, return as is
         return img.astype(np.uint8)
