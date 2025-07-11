@@ -440,23 +440,19 @@ class VisualAligner:
         aligned_photo = self.apply_affine_transform(original_photo, final_params,
                                                    (h_orig, w_orig))
         
-        # Handle output path and saving
-        saved_path = None
-        if output_path is not None:
-            # Generate output path if not provided
-            if output_path == "":
-                base_name = os.path.splitext(os.path.basename(photo_path))[0]
-                output_path = f"{base_name}_aligned.jpg"
+        if output_path is None:
+            base_name = os.path.splitext(os.path.basename(drawing_path))[0]
+            output_path = f"{base_name}_aligned.jpg"
             
-            cv2.imwrite(output_path, aligned_photo)
-            saved_path = output_path
-            print(f"Aligned photo saved to: {output_path}")
+        cv2.imwrite(output_path, aligned_photo)
+        print(f"Aligned photo saved to: {output_path}")
         
-        return aligned_photo, final_params, saved_path
+        return aligned_photo, final_params, output_path
 
 if __name__ == "__main__":
-    photo_path = "3_photo.jpeg"  # Replace with your photo path
-    drawing_path = "3_drawing.jpeg"  # Replace with your drawing path
+    img_id = 3
+    photo_path   = f"{img_id}_photo.jpeg"  # Replace with your photo path
+    drawing_path = f"{img_id}_drawing.jpeg"  # Replace with your drawing path
     
     aligner = VisualAligner()
-    aligned_photo, params, saved_path = aligner.align_images(photo_path, drawing_path, "custom_aligned.jpg")   
+    aligned_photo, params, saved_path = aligner.align_images(photo_path, drawing_path)   
